@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Posts on Neelansh&#39;s Website</title>
+    <link>/post/</link>
+    <description>Recent content in Posts on Neelansh&#39;s Website</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>en-us</language>
+    <lastBuildDate>Sun, 27 Sep 2020 00:00:00 +0000</lastBuildDate><atom:link href="/post/index.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Estimating Apartment Building Standards Scores from Lobby Entrance Ratings</title>
+      <link>/2020/09/27/estimating-apartment-building-standards-scores-from-lobby-entrance-ratings/</link>
+      <pubDate>Sun, 27 Sep 2020 00:00:00 +0000</pubDate>
+      
+      <guid>/2020/09/27/estimating-apartment-building-standards-scores-from-lobby-entrance-ratings/</guid>
+      <description>IntroductionAs any apartment renter knows, the first impression one has of a building tends to leave a significant mark. Assessment of overall building quality, and by association landlord quality, begins as soon as one walks through the doors. Although we are told never to judge a book by its cover, when it comes to finding a home, it can be difficult to ignore our intuition. When someone enters a building for the first time in hopes of finding a new home and greeted with a broken window or a dirty lobby, the appeal of living there fades immediately.</description>
+    </item>
+    
+  </channel>
+</rss>

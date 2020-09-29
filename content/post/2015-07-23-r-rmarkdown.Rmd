@@ -1,0 +1,254 @@
+---
+title: "Estimating Apartment Building Standards Scores from Lobby Entrance Ratings"
+author: "Neelansh Visen"
+date: "2020-09-27"
+output: html_document
+abstract: "In this paper we explorer the RentSafeTO: Apartment Building Standards dataset. Used to ensure building maintenance standards, the dataset includes inspection scores for common apartment areas such as lobbies, entrances, and elevators. We find that there exists a statistical relationship between building lobby ratings, building entrance doors and windows, and overall building evaluation scores. These findings help potential tenants gauge a general understanding of building and landlord quality without the need for detailed individual examination."
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# install.packages("tidyverse")
+# install.packages("devtools")
+# install.packages("opendatatoronto")
+# install.packages("dplyr")
+library(tidyverse)
+library(devtools)
+library(opendatatoronto)
+library(dplyr)
+```
+
+# Introduction
+
+As any apartment renter knows, the first impression one has of a building tends to leave a significant mark. Assessment of overall building quality, and by association landlord quality, begins as soon as one walks through the doors. Although we are told never to judge a book by its cover, when it comes to finding a home, it can be difficult to ignore our intuition. When someone enters a building for the first time in hopes of finding a new home and greeted with a broken window or a dirty lobby, the appeal of living there fades immediately. Likewise if someone enters a building and is met with warmth, fancy amenities, and a welcoming foyer, then suddenly it feels like move-in day cannot come soon enough. 
+
+The purpose of this study is to put our intuitions to the test, and examine whether any significant relationship exists between building entrance quality and overall building quality. In order to do so, this paper accesses data from the Toronto Open Data Portal (https://open.toronto.ca/). The following assessment uses observation ratings from building audits conducted within the last three years. For each building, several of its physical features and amenities are given a score between 1 and 5, with 5 considered the best. A total building score out of 100 is derived from each individual competent score, and determines whether a full building audit is required. This paper uses plots and tables within the context of a multiple linear regression model to assess the relationship between total apartment score and two categorical explanatory variables: lobby quality and entrance doors and windows quality.  
+
+This paper features some commented R code, but remains accessible to those not adept with programming or statistics. The goal of this study in a broad sense is to reinforce the notion that our intuitions tend to serve us well during important moments, such as when we look for a new home. Because this analysis only focuses on the impact of two variables on building quality, this paper should not be taken literally as apartment hunting advice. Rather, it should serve to inspire future studies that shine a spotlight on the superpower that is our intuition.   
+
+```{r download, warning = FALSE, message = FALSE}
+
+# download the dataset via the opendatatoronto R package
+# devtools::install_github("sharlagelfand/opendatatoronto")
+
+# get package: 
+package <- show_package("4ef82789-e038-44ef-a478-a8f3590c3eb1")
+
+# get all resources for this package
+resources <- list_package_resources("4ef82789-e038-44ef-a478-a8f3590c3eb1")
+
+# identify datastore resources; by default, Toronto Open Data sets datastore resource format to CSV for non-geospatial and GeoJSON for geospatial resources
+datastore_resources <- filter(resources, tolower(format) %in% c('csv', 'geojson'))
+
+# load the first datastore resource as a sample
+apartment_data <- filter(datastore_resources, row_number()==1) %>% get_resource()
+```
+
+# Data 
+
+The RentSafeTO: Apartment Building Standards (ABS) dataset is generated from a "bylaw enforcement program that covers buildings that are three or more stories and ten or more units" (City of Toronto). Evaluations for all buildings in the ABS program are contained in the dataset. The dataset focuses on common apartment spaces and amenities including hallways, entrances and exits, lobbies, and laundry rooms. Apartment buildings are classified under 33 different categories, only some of which contain audited evaluation scores. The rest of the categories either describe fixed building features (e.g. the number of confirmed stories and units), or contain administrative data related to other ABS datasets (e.g. building IDs). 
+
+This paper focuses on 3 different evaluation scores, described on the Toronto Open Data Portal website as follows. "ENTRANCE_DOORS_WINDOWS" represents, "the condition of the entrance doors and windows in the building" (City of Toronto). "ENTRANCE_LOBBY" focuses on "the condition of the entrance and/or lobby in a building". "SCORE" is the total evaluation score given to a building and is calculated as follows: "sum of all assigned scores during the evaluation / (number of unique areas reviewed * 5." The line of code below gives us a glimpse of the full ABS dataset. 
+
+```{r preview data}
+# preview the full apartment data set
+glimpse(apartment_data)
+```
+
+# Discussion
+
+In order to properly analyze the data, the complete apartment dataset has to be filtered of unwanted categories and missing values. The code below removes any data entries labelled N/A, removes any public housing complexes, and selects only the three categories described earlier. 
+
+```{r cleaning data}
+# because this study only requires a few columns, we can clean up the data set we work with
+clean_data <- apartment_data %>% 
+  # filter out any blanks or N/A's 
+  filter(!is.na(SCORE)) %>% 
+  filter(!is.na(ENTRANCE_LOBBY)) %>% 
+  filter(!is.na(ENTRANCE_DOORS_WINDOWS)) %>% 
+  # filter out any social housing apartment complexes since our study focuses on tenants and potential private homes
+  filter(PROPERTY_TYPE == "PRIVATE") %>% 
+  # rename certain variables for cleaner presentation 
+  dplyr::select(total_score = SCORE,
+                entrance_lobby = ENTRANCE_LOBBY,
+                entrance_doors_windows = ENTRANCE_DOORS_WINDOWS
+  )
+# look at the cleaned up data set
+glimpse(clean_data)
+```
+
+Because the data entries were originally uploaded as characters, they must be changed to numbers. This can be done easily by using the built-in "numeric" function in R.
+
+```{r changing variable types, warning=FALSE}
+# we want the variables to be numbers, not characters
+clean_data <- as.data.frame(apply(clean_data, 2, as.numeric))
+# data set is now comprised of numbers only
+glimpse(clean_data)
+```
+
+Now that the data is sorted, we can begin our data analysis. Since we have ascribed an apartment's total score as the response/dependent/y variable, it may be insightful to see the distribution and spread of scores in the dataset. The "summary" function in R provides a five-number summary (the minimum and maximum scores, as well as the 25th, 50th and 75th percentile scores), as well as the average or mean score. To better capture the spread of the values, we can look at the variance and standard deviation of the total scores across all buildings in the dataset.
+
+```{r summary statistics}
+# summary statistics for total apartment scores
+summary(clean_data$total_score)
+```
+```{r variance and standard deviation}
+# variance and standard deviation of apartment scores
+var(clean_data$total_score)
+sd(clean_data$total_score)
+```
+
+To make this data more appealing, a histogram with a kernel density estimate (KDE) can be made to display every apartment building score in one image. A histogram can better answer how spread out the data is, what kind of distribution the data follows, whether any outliers exist in the data, and if the data contains any unusual features. A kernel density estimate tells us the probability of seeing an observation at a specific point along the total ABS score axis. With the KDE, we do not lose any information by placing scores in arbitrary score ranges. 
+
+Both the histogram and KDE below show us that the majority of apartment buildings in the dataset have a total ABS score between 60 and 90. Furthermore, the data appears to follow a bell curve shape reminiscent of a normal distribution.
+
+```{r}
+# creating a histogram to show the distribution of apartment ratings in the data set
+total_score_histogram <- clean_data %>%
+  # Tell ggplot to use score on the x axis
+  ggplot(aes(x = total_score)) +
+  # Default plot style
+  theme_classic() +
+  # Create the histogram
+  geom_histogram( 
+    aes(y = ..density..),
+    # 14 bins fits the best given the max/min
+    bins = 14,
+    colour = "black",
+    fill = "lightgrey"
+  ) +
+  geom_density() +
+  # graph labels
+  labs(title = "Histogram and Kernel Density Estimate of Total ABS Scores",
+       x = "Total ABS Score",
+       y = "Density") +
+  scale_x_continuous(breaks = seq(35,100,by = 5))
+
+total_score_histogram
+```
+
+To further assess the normality of the data, we make a quantile-quantile plot (QQP). The individual data points on the left side of the QQP fall off the theoretical line of normality, indicating that the total score data is left or negatively skewed.  
+
+```{r qqplot}
+total_score_qq <- clean_data %>% 
+  ggplot(aes(sample = total_score)) +
+  # actual score data
+  stat_qq() +
+  # theoretical normal line
+  stat_qq_line() + 
+  labs(title = "Quantile-Quantile Plot of Total ABS Scores",
+       x = "Theoretical Quantiles",
+       y = "Sample Quantiles")
+
+total_score_qq
+```
+
+Because this study contains two explanatory variables, we should identify the relationship each predictor has individually with regards to total ABS score. To do this we use a violin plot, which combines the two elements used to describe total ABS scores: the five-number summary (represented by a boxplot), and the KDE. The violin plots in the first image are used to show the distribution of total ABS scores based on the quality of entrance lobby. Similarly, the violin plots in the second image show the distribution of total ABS scores based on the quality of entrance doors and windows. 
+
+By inspection, we see a general positive trend between total ABS scores and both explanatory variables. The median values of each boxplot (illustrated by the horizontal orange bar), clearly increase with higher lobby and doors and windows scores. While expected, it is nowhere near a conclusive result, given the wide distribution of each violin plot's KDE. If an apartment building happens to rate highly in either explanatory variable category, it is by no means indicative of a high quality building overall. 
+
+```{r violin plots}
+lobby_violin <- clean_data  %>% 
+  # violin plot with lobby scores on the x-axis
+  ggplot(aes(x = factor(entrance_lobby), y = total_score)) + 
+  theme_classic() +
+  # blue fill on the rotated kernel density plot
+  geom_violin(fill="#0000ff") +
+  # individual apartment ratings labelled with orange triangles
+  geom_boxplot(width = 0.2, color = "#FFA500") +
+  labs(title = "Total ABS Scores, Sorted by Condition of Entrance Lobby",
+       x = "Lobby Score",
+       y = "Total ABS Score") 
+
+lobby_violin
+
+doors_windows_violin <- clean_data  %>% 
+  # violin plot with entrance doors and windows scores on the x-axis
+  ggplot(aes(x = factor(entrance_doors_windows), y = total_score)) + 
+  theme_classic() +
+  geom_violin(fill="#0000ff") +
+  geom_boxplot(width = 0.2, color = "#FFA500") +
+  labs(title = "Total ABS Scores, Sorted by Condition of Entrance Doors and Windows",
+       x = "Doors and Windows Score",
+       y = "Total ABS Score") 
+
+doors_windows_violin
+```
+
+Although we fail to yield any significant results after evaluating each explanatory variable on its own, it is possible that assessing them in conjunction may lead to something promising. To do this, we first create a table to see whether there exists any significant variance in ABS score when apartments are grouped by both explanatory variables. Unsurprisingly, we notice an upward trend in ABS score when both categorical variable scores increase.  To visualize this in a cleaner way, we create a scatter plot. Lobby scores are marked on the x-axis, doors and windows scores are marked on the y-axis, and apartment scores are marked on a blue gradient where lighter dots represent higher total ABS scores. It is now much easier to see the increase in total ABS score when both explanatory variables are accounted for. 
+
+```{r average apartament score based on both subcategories}
+clean_data %>% 
+  group_by(entrance_lobby, entrance_doors_windows) %>% 
+  summarize(avg_score = mean(total_score, na.rm = TRUE)) 
+```
+
+```{r dot plot with both explanatory variables}
+clean_data %>% 
+  # total apartment scores are shown with lighter shades of blue
+  # lobby ratings appear on x-axis
+  # entrance doors and windows ratings appear on y-axis
+  ggplot(aes(x = entrance_lobby, y = entrance_doors_windows, color = total_score)) +
+  geom_point(position = position_jitterdodge(jitter.width = 0.3,
+  jitter.height = 0.3)) +
+  labs(title = "Total ABS Scores, Sorted by Quality of Entrance Doors and Entrance Windows and Lobbies",
+       x = "Lobby Score",
+       y = "Doors and Windows Score",
+       color = "Total ABS Score")
+```
+
+As helpful as plots and other visuals can be, when it comes to statistical analysis and research, it is best perhaps to use them to supplement a more mathematically rigorous model. In this case, because we have one response variable and two explanatory variables, we can use a multiple linear regression to model our findings. In general, our model can be described by the following equation: y = b0 + b1*x1 + b2*x2, where y is total ABS score, x1 is lobby score, x2 is doors and windows score, and the "b" values are measures of association between the "x" values and the outcome. In R, we can conduct a multiple linear regression output with little effort. 
+
+```{r multiple linear regression output}
+# conducting a multiple linear regression, two explanatory variables against total apartment score
+mult_reg <- lm(total_score ~ entrance_lobby + entrance_doors_windows, data = clean_data)
+# the output of the linear regression model
+summary(mult_reg)
+```
+
+The multiple regression model tells us that if both explanatory score variables were set to 0, it expects an apartment's total ABS score to be just under 32. For every increase by 1 for lobby score, the model predicts an increase in total ABS score by 6.7308. For every increase by 1 for entrance doors and windows score, the model predicts an increase of 4.8278. This result concludes that apartment lobby quality may reflect total apartment quality more strongly than entrance doors and windows do. The low P values (<2e-16) for both explanatory variables indicate that they are meaningful additions to the model, as well as statistically significant. The adjusted R-squared value (0.6565) indicates that the two explanatory variables account for just over 65% of the variance in total ABS score. Based on the outcomes of the regression model, we can conclude that there exists a positive linear association between apartment lobby scores,  apartment entrance doors and windows scores, and total apartment scores in the RentSafeTO dataset.
+
+
+# Weaknesses and Next steps
+
+A significant limitation to this study are any potential lurking variables, namely building upkeep budgets, size of the developers/landlords, and average unit costs. This study, which focuses on building qualities and amenities that lean on funding, tends to ignore money as a factor altogether. Furthermore, the data used in this study relies on specific auditing scores based on a relatively small scale (1-5). It is possible that a dataset containing a more detailed scoring system would yield more conclusive results. Finally, the two explanatory variables used in this study were selected somewhat arbitrarily from a wide variety of categorical scores. It is possible that any random combination of explanatory variables from the dataset could have produced similar results. Other researchers interested in using the RentSafeTO apartment dataset may choose to focus on a wider variety of explanatory variables, different from the combination used in this paper. A similar multiple regression model with several more explanatory variables may end up explaining more of the variance in ABS scores across different buildings. One possible extension of this project may involve hand collected data from random tenants, visitors, and other pedestrians, instead of the RentSafeTO dataset. 
+
+# Code
+
+All code for this paper are available at https://github.com/neelvisen/STA304-PS1
+
+
+# References
+
+Hadley Wickham, Jim Hester and Winston Chang
+(2020). devtools: Tools to Make Developing R
+Packages Easier. R package version 2.3.1.
+https://CRAN.R-project.org/package=devtools
+  
+
+Hadley Wickham, Romain François, Lionel Henry and
+Kirill Müller (2020). dplyr: A Grammar of Data
+Manipulation. R package version 1.0.1.
+https://CRAN.R-project.org/package=dplyr  
+
+
+R Core Team (2020). R: A language and environment
+for statistical computing. R Foundation for
+Statistical Computing, Vienna, Austria. URL
+https://www.R-project.org/.
+
+
+Sharla Gelfand (2020). opendatatoronto: Access
+the City of Toronto Open Data Portal. R package
+version 0.1.3.
+https://CRAN.R-project.org/package=opendatatoronto
+
+
+Wickham et al., (2019). Welcome to the tidyverse.
+Journal of Open Source Software, 4(43), 1686,
+https://doi.org/10.21105/joss.01686
+
+
+Yihui Xie, Alison Presmanes Hill, and Amber
+Thomas (2017). blogdown: Creating Websites with R
+Markdown. Chapman and Hall/CRC. ISBN
+978-0815363729

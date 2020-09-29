@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="generator" content="Hugo 0.75.1" />
+
+
+<title>Estimating Apartment Building Standards Scores from Lobby Entrance Ratings - Neelansh&#39;s Website</title>
+<meta property="og:title" content="Estimating Apartment Building Standards Scores from Lobby Entrance Ratings - Neelansh&#39;s Website">
+
+
+  <link href='/favicon.ico' rel='icon' type='image/x-icon'/>
+
+
+
+  
+
+
+
+
+
+
+
+
+<link href='//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/github.min.css' rel='stylesheet' type='text/css' />
+
+
+
+<link rel="stylesheet" href="/css/fonts.css" media="all">
+<link rel="stylesheet" href="/css/main.css" media="all">
+
+
+
+  </head>
+  <body>
+    <div class="wrapper">
+      <header class="header">
+        <nav class="nav">
+  <a href="/" class="nav-logo">
+    <img src="/images/logo.png"
+         width="50"
+         height="50"
+         alt="Logo">
+  </a>
+
+  <ul class="nav-links">
+    
+    <li><a href="/about/">About</a></li>
+    
+    <li><a href="https://github.com/rstudio/blogdown">GitHub</a></li>
+    
+  </ul>
+</nav>
+
+      </header>
+
+
+<main class="content" role="main">
+
+  <article class="article">
+    
+    <span class="article-duration">15 min read</span>
+    
+
+    <h1 class="article-title">Estimating Apartment Building Standards Scores from Lobby Entrance Ratings</h1>
+
+    
+    <span class="article-date">2020-09-27</span>
+    
+
+    <div class="article-content">
+      
+
+
+<div id="introduction" class="section level1">
+<h1>Introduction</h1>
+<p>As any apartment renter knows, the first impression one has of a building tends to leave a significant mark. Assessment of overall building quality, and by association landlord quality, begins as soon as one walks through the doors. Although we are told never to judge a book by its cover, when it comes to finding a home, it can be difficult to ignore our intuition. When someone enters a building for the first time in hopes of finding a new home and greeted with a broken window or a dirty lobby, the appeal of living there fades immediately. Likewise if someone enters a building and is met with warmth, fancy amenities, and a welcoming foyer, then suddenly it feels like move-in day cannot come soon enough.</p>
+<p>The purpose of this study is to put our intuitions to the test, and examine whether any significant relationship exists between building entrance quality and overall building quality. In order to do so, this paper accesses data from the Toronto Open Data Portal (<a href="https://open.toronto.ca/" class="uri">https://open.toronto.ca/</a>). The following assessment uses observation ratings from building audits conducted within the last three years. For each building, several of its physical features and amenities are given a score between 1 and 5, with 5 considered the best. A total building score out of 100 is derived from each individual competent score, and determines whether a full building audit is required. This paper uses plots and tables within the context of a multiple linear regression model to assess the relationship between total apartment score and two categorical explanatory variables: lobby quality and entrance doors and windows quality.</p>
+<p>This paper features some commented R code, but remains accessible to those not adept with programming or statistics. The goal of this study in a broad sense is to reinforce the notion that our intuitions tend to serve us well during important moments, such as when we look for a new home. Because this analysis only focuses on the impact of two variables on building quality, this paper should not be taken literally as apartment hunting advice. Rather, it should serve to inspire future studies that shine a spotlight on the superpower that is our intuition.</p>
+<pre class="r"><code># download the dataset via the opendatatoronto R package
+# devtools::install_github(&quot;sharlagelfand/opendatatoronto&quot;)
+
+# get package: 
+package &lt;- show_package(&quot;4ef82789-e038-44ef-a478-a8f3590c3eb1&quot;)
+
+# get all resources for this package
+resources &lt;- list_package_resources(&quot;4ef82789-e038-44ef-a478-a8f3590c3eb1&quot;)
+
+# identify datastore resources; by default, Toronto Open Data sets datastore resource format to CSV for non-geospatial and GeoJSON for geospatial resources
+datastore_resources &lt;- filter(resources, tolower(format) %in% c(&#39;csv&#39;, &#39;geojson&#39;))
+
+# load the first datastore resource as a sample
+apartment_data &lt;- filter(datastore_resources, row_number()==1) %&gt;% get_resource()</code></pre>
+</div>
+<div id="data" class="section level1">
+<h1>Data</h1>
+<p>The RentSafeTO: Apartment Building Standards (ABS) dataset is generated from a “bylaw enforcement program that covers buildings that are three or more stories and ten or more units” (City of Toronto). Evaluations for all buildings in the ABS program are contained in the dataset. The dataset focuses on common apartment spaces and amenities including hallways, entrances and exits, lobbies, and laundry rooms. Apartment buildings are classified under 33 different categories, only some of which contain audited evaluation scores. The rest of the categories either describe fixed building features (e.g. the number of confirmed stories and units), or contain administrative data related to other ABS datasets (e.g. building IDs).</p>
+<p>This paper focuses on 3 different evaluation scores, described on the Toronto Open Data Portal website as follows. “ENTRANCE_DOORS_WINDOWS” represents, “the condition of the entrance doors and windows in the building” (City of Toronto). “ENTRANCE_LOBBY” focuses on “the condition of the entrance and/or lobby in a building”. “SCORE” is the total evaluation score given to a building and is calculated as follows: “sum of all assigned scores during the evaluation / (number of unique areas reviewed * 5.” The line of code below gives us a glimpse of the full ABS dataset.</p>
+<pre class="r"><code># preview the full apartment data set
+glimpse(apartment_data)</code></pre>
+<pre><code>## Rows: 3,456
+## Columns: 33
+## $ `_id`                       &lt;int&gt; 10517, 10518, 10519, 10520, 10521, 1052...
+## $ BALCONY_GUARDS              &lt;chr&gt; &quot;2&quot;, &quot;3&quot;, &quot;3&quot;, &quot;N/A&quot;, &quot;3&quot;, &quot;N/A&quot;, &quot;3&quot;, ...
+## $ CONFIRMED_STOREYS           &lt;dbl&gt; 4, 8, 4, 3, 3, 3, 4, 6, 3, 4, 4, 4, 4, ...
+## $ CONFIRMED_UNITS             &lt;dbl&gt; 39, 124, 27, 12, 30, 11, 40, 65, 11, 34...
+## $ ELEVATORS                   &lt;chr&gt; &quot;1&quot;, &quot;4&quot;, &quot;3&quot;, &quot;N/A&quot;, &quot;3&quot;, &quot;N/A&quot;, &quot;4&quot;, ...
+## $ ENTRANCE_DOORS_WINDOWS      &lt;chr&gt; &quot;2&quot;, &quot;3&quot;, &quot;3&quot;, &quot;3&quot;, &quot;4&quot;, &quot;5&quot;, &quot;3&quot;, &quot;4&quot;,...
+## $ ENTRANCE_LOBBY              &lt;chr&gt; &quot;2&quot;, &quot;4&quot;, &quot;3&quot;, &quot;3&quot;, &quot;4&quot;, &quot;5&quot;, &quot;4&quot;, &quot;4&quot;,...
+## $ EVALUATION_COMPLETED_ON     &lt;chr&gt; &quot;01/04/2019&quot;, &quot;01/10/2018&quot;, &quot;01/07/2019...
+## $ EXTERIOR_CLADDING           &lt;chr&gt; &quot;1&quot;, &quot;4&quot;, &quot;4&quot;, &quot;3&quot;, &quot;4&quot;, &quot;4&quot;, &quot;3&quot;, &quot;3&quot;,...
+## $ EXTERIOR_GROUNDS            &lt;chr&gt; &quot;2&quot;, &quot;3&quot;, &quot;3&quot;, &quot;3&quot;, &quot;3&quot;, &quot;3&quot;, &quot;4&quot;, &quot;4&quot;,...
+## $ EXTERIOR_WALKWAYS           &lt;chr&gt; &quot;2&quot;, &quot;3&quot;, &quot;3&quot;, &quot;3&quot;, &quot;3&quot;, &quot;4&quot;, &quot;3&quot;, &quot;4&quot;,...
+## $ GARBAGE_BIN_STORAGE_AREA    &lt;chr&gt; &quot;3&quot;, &quot;3&quot;, &quot;4&quot;, &quot;3&quot;, &quot;3&quot;, &quot;4&quot;, &quot;4&quot;, &quot;4&quot;,...
+## $ GARBAGE_CHUTE_ROOMS         &lt;chr&gt; &quot;N/A&quot;, &quot;4&quot;, &quot;N/A&quot;, &quot;N/A&quot;, &quot;N/A&quot;, &quot;N/A&quot;,...
+## $ GRAFFITI                    &lt;chr&gt; &quot;3&quot;, &quot;5&quot;, &quot;5&quot;, &quot;4&quot;, &quot;5&quot;, &quot;3&quot;, &quot;4&quot;, &quot;5&quot;,...
+## $ INTERIOR_LIGHTING_LEVELS    &lt;chr&gt; &quot;1&quot;, &quot;4&quot;, &quot;4&quot;, &quot;2&quot;, &quot;5&quot;, &quot;3&quot;, &quot;4&quot;, &quot;4&quot;,...
+## $ INTERIOR_WALL_CEILING_FLOOR &lt;chr&gt; &quot;1&quot;, &quot;4&quot;, &quot;3&quot;, &quot;3&quot;, &quot;4&quot;, &quot;5&quot;, &quot;4&quot;, &quot;3&quot;,...
+## $ INTERNAL_GUARDS_HANDRAILS   &lt;chr&gt; &quot;2&quot;, &quot;4&quot;, &quot;4&quot;, &quot;3&quot;, &quot;3&quot;, &quot;5&quot;, &quot;3&quot;, &quot;5&quot;,...
+## $ LAUNDRY_ROOMS               &lt;chr&gt; &quot;2&quot;, &quot;3&quot;, &quot;2&quot;, &quot;2&quot;, &quot;3&quot;, &quot;5&quot;, &quot;3&quot;, &quot;4&quot;,...
+## $ NO_OF_AREAS_EVALUATED       &lt;chr&gt; &quot;17&quot;, &quot;19&quot;, &quot;17&quot;, &quot;15&quot;, &quot;17&quot;, &quot;15&quot;, &quot;18...
+## $ OTHER_FACILITIES            &lt;chr&gt; &quot;N/A&quot;, &quot;4&quot;, &quot;N/A&quot;, &quot;N/A&quot;, &quot;N/A&quot;, &quot;N/A&quot;,...
+## $ PARKING_AREA                &lt;chr&gt; &quot;2&quot;, &quot;3&quot;, &quot;3&quot;, &quot;2&quot;, &quot;3&quot;, &quot;3&quot;, &quot;4&quot;, &quot;4&quot;,...
+## $ PROPERTY_TYPE               &lt;chr&gt; &quot;PRIVATE&quot;, &quot;TCHC&quot;, &quot;PRIVATE&quot;, &quot;PRIVATE&quot;...
+## $ RESULTS_OF_SCORE            &lt;chr&gt; &quot;Building Audit&quot;, &quot;Evaluation needs to ...
+## $ RSN                         &lt;dbl&gt; 4154404, 4154405, 4154412, 4154413, 415...
+## $ SCORE                       &lt;chr&gt; &quot;38&quot;, &quot;72&quot;, &quot;68&quot;, &quot;59&quot;, &quot;72&quot;, &quot;83&quot;, &quot;73...
+## $ SECURITY                    &lt;chr&gt; &quot;2&quot;, &quot;3&quot;, &quot;4&quot;, &quot;4&quot;, &quot;4&quot;, &quot;4&quot;, &quot;5&quot;, &quot;5&quot;,...
+## $ SITE_ADDRESS                &lt;chr&gt; &quot;2233  JANE ST &quot;, &quot;1286  WILSON AVE &quot;, ...
+## $ STAIRWELLS                  &lt;chr&gt; &quot;2&quot;, &quot;4&quot;, &quot;3&quot;, &quot;3&quot;, &quot;3&quot;, &quot;5&quot;, &quot;4&quot;, &quot;4&quot;,...
+## $ STORAGE_AREAS_LOCKERS       &lt;chr&gt; &quot;N/A&quot;, &quot;N/A&quot;, &quot;N/A&quot;, &quot;N/A&quot;, &quot;N/A&quot;, &quot;N/A...
+## $ WARD                        &lt;chr&gt; &quot;06&quot;, &quot;06&quot;, &quot;06&quot;, &quot;06&quot;, &quot;06&quot;, &quot;06&quot;, &quot;16...
+## $ WATER_PEN_EXT_BLDG_ELEMENTS &lt;chr&gt; &quot;2&quot;, &quot;3&quot;, &quot;4&quot;, &quot;3&quot;, &quot;4&quot;, &quot;4&quot;, &quot;3&quot;, &quot;4&quot;,...
+## $ YEAR_BUILT                  &lt;chr&gt; &quot;1965&quot;, &quot;1993&quot;, &quot;1965&quot;, &quot;1954&quot;, &quot;1959&quot;,...
+## $ YEAR_REGISTERED             &lt;chr&gt; &quot;2017&quot;, &quot;2017&quot;, &quot;2017&quot;, &quot;2017&quot;, &quot;2017&quot;,...</code></pre>
+</div>
+<div id="discussion" class="section level1">
+<h1>Discussion</h1>
+<p>In order to properly analyze the data, the complete apartment dataset has to be filtered of unwanted categories and missing values. The code below removes any data entries labelled N/A, removes any public housing complexes, and selects only the three categories described earlier.</p>
+<pre class="r"><code># because this study only requires a few columns, we can clean up the data set we work with
+clean_data &lt;- apartment_data %&gt;% 
+  # filter out any blanks or N/A&#39;s 
+  filter(!is.na(SCORE)) %&gt;% 
+  filter(!is.na(ENTRANCE_LOBBY)) %&gt;% 
+  filter(!is.na(ENTRANCE_DOORS_WINDOWS)) %&gt;% 
+  # filter out any social housing apartment complexes since our study focuses on tenants and potential private homes
+  filter(PROPERTY_TYPE == &quot;PRIVATE&quot;) %&gt;% 
+  # rename certain variables for cleaner presentation 
+  dplyr::select(total_score = SCORE,
+                entrance_lobby = ENTRANCE_LOBBY,
+                entrance_doors_windows = ENTRANCE_DOORS_WINDOWS
+  )
+# look at the cleaned up data set
+glimpse(clean_data)</code></pre>
+<pre><code>## Rows: 2,868
+## Columns: 3
+## $ total_score            &lt;chr&gt; &quot;38&quot;, &quot;68&quot;, &quot;59&quot;, &quot;72&quot;, &quot;83&quot;, &quot;73&quot;, &quot;80&quot;, &quot;7...
+## $ entrance_lobby         &lt;chr&gt; &quot;2&quot;, &quot;3&quot;, &quot;3&quot;, &quot;4&quot;, &quot;5&quot;, &quot;4&quot;, &quot;4&quot;, &quot;3&quot;, &quot;4&quot;,...
+## $ entrance_doors_windows &lt;chr&gt; &quot;2&quot;, &quot;3&quot;, &quot;3&quot;, &quot;4&quot;, &quot;5&quot;, &quot;3&quot;, &quot;4&quot;, &quot;3&quot;, &quot;4&quot;,...</code></pre>
+<p>Because the data entries were originally uploaded as characters, they must be changed to numbers. This can be done easily by using the built-in “numeric” function in R.</p>
+<pre class="r"><code># we want the variables to be numbers, not characters
+clean_data &lt;- as.data.frame(apply(clean_data, 2, as.numeric))
+# data set is now comprised of numbers only
+glimpse(clean_data)</code></pre>
+<pre><code>## Rows: 2,868
+## Columns: 3
+## $ total_score            &lt;dbl&gt; 38, 68, 59, 72, 83, 73, 80, 76, 83, 73, 71, ...
+## $ entrance_lobby         &lt;dbl&gt; 2, 3, 3, 4, 5, 4, 4, 3, 4, 4, 4, 4, 3, 3, 2,...
+## $ entrance_doors_windows &lt;dbl&gt; 2, 3, 3, 4, 5, 3, 4, 3, 4, 3, 4, 4, 3, 2, 3,...</code></pre>
+<p>Now that the data is sorted, we can begin our data analysis. Since we have ascribed an apartment’s total score as the response/dependent/y variable, it may be insightful to see the distribution and spread of scores in the dataset. The “summary” function in R provides a five-number summary (the minimum and maximum scores, as well as the 25th, 50th and 75th percentile scores), as well as the average or mean score. To better capture the spread of the values, we can look at the variance and standard deviation of the total scores across all buildings in the dataset.</p>
+<pre class="r"><code># summary statistics for total apartment scores
+summary(clean_data$total_score)</code></pre>
+<pre><code>##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+##    37.0    71.0    76.0    76.3    82.0   100.0</code></pre>
+<pre class="r"><code># variance and standard deviation of apartment scores
+var(clean_data$total_score)</code></pre>
+<pre><code>## [1] 86.54121</code></pre>
+<pre class="r"><code>sd(clean_data$total_score)</code></pre>
+<pre><code>## [1] 9.302753</code></pre>
+<p>To make this data more appealing, a histogram with a kernel density estimate (KDE) can be made to display every apartment building score in one image. A histogram can better answer how spread out the data is, what kind of distribution the data follows, whether any outliers exist in the data, and if the data contains any unusual features. A kernel density estimate tells us the probability of seeing an observation at a specific point along the total ABS score axis. With the KDE, we do not lose any information by placing scores in arbitrary score ranges.</p>
+<p>Both the histogram and KDE below show us that the majority of apartment buildings in the dataset have a total ABS score between 60 and 90. Furthermore, the data appears to follow a bell curve shape reminiscent of a normal distribution.</p>
+<pre class="r"><code># creating a histogram to show the distribution of apartment ratings in the data set
+total_score_histogram &lt;- clean_data %&gt;%
+  # Tell ggplot to use score on the x axis
+  ggplot(aes(x = total_score)) +
+  # Default plot style
+  theme_classic() +
+  # Create the histogram
+  geom_histogram( 
+    aes(y = ..density..),
+    # 14 bins fits the best given the max/min
+    bins = 14,
+    colour = &quot;black&quot;,
+    fill = &quot;lightgrey&quot;
+  ) +
+  geom_density() +
+  # graph labels
+  labs(title = &quot;Histogram and Kernel Density Estimate of Total ABS Scores&quot;,
+       x = &quot;Total ABS Score&quot;,
+       y = &quot;Density&quot;) +
+  scale_x_continuous(breaks = seq(35,100,by = 5))
+
+total_score_histogram</code></pre>
+<p><img src="/post/2015-07-23-r-rmarkdown_files/figure-html/unnamed-chunk-1-1.png" width="672" /></p>
+<p>To further assess the normality of the data, we make a quantile-quantile plot (QQP). The individual data points on the left side of the QQP fall off the theoretical line of normality, indicating that the total score data is left or negatively skewed.</p>
+<pre class="r"><code>total_score_qq &lt;- clean_data %&gt;% 
+  ggplot(aes(sample = total_score)) +
+  # actual score data
+  stat_qq() +
+  # theoretical normal line
+  stat_qq_line() + 
+  labs(title = &quot;Quantile-Quantile Plot of Total ABS Scores&quot;,
+       x = &quot;Theoretical Quantiles&quot;,
+       y = &quot;Sample Quantiles&quot;)
+
+total_score_qq</code></pre>
+<p><img src="/post/2015-07-23-r-rmarkdown_files/figure-html/qqplot-1.png" width="672" /></p>
+<p>Because this study contains two explanatory variables, we should identify the relationship each predictor has individually with regards to total ABS score. To do this we use a violin plot, which combines the two elements used to describe total ABS scores: the five-number summary (represented by a boxplot), and the KDE. The violin plots in the first image are used to show the distribution of total ABS scores based on the quality of entrance lobby. Similarly, the violin plots in the second image show the distribution of total ABS scores based on the quality of entrance doors and windows.</p>
+<p>By inspection, we see a general positive trend between total ABS scores and both explanatory variables. The median values of each boxplot (illustrated by the horizontal orange bar), clearly increase with higher lobby and doors and windows scores. While expected, it is nowhere near a conclusive result, given the wide distribution of each violin plot’s KDE. If an apartment building happens to rate highly in either explanatory variable category, it is by no means indicative of a high quality building overall.</p>
+<pre class="r"><code>lobby_violin &lt;- clean_data  %&gt;% 
+  # violin plot with lobby scores on the x-axis
+  ggplot(aes(x = factor(entrance_lobby), y = total_score)) + 
+  theme_classic() +
+  # blue fill on the rotated kernel density plot
+  geom_violin(fill=&quot;#0000ff&quot;) +
+  # individual apartment ratings labelled with orange triangles
+  geom_boxplot(width = 0.2, color = &quot;#FFA500&quot;) +
+  labs(title = &quot;Total ABS Scores, Sorted by Condition of Entrance Lobby&quot;,
+       x = &quot;Lobby Score&quot;,
+       y = &quot;Total ABS Score&quot;) 
+
+lobby_violin</code></pre>
+<p><img src="/post/2015-07-23-r-rmarkdown_files/figure-html/violin%20plots-1.png" width="672" /></p>
+<pre class="r"><code>doors_windows_violin &lt;- clean_data  %&gt;% 
+  # violin plot with entrance doors and windows scores on the x-axis
+  ggplot(aes(x = factor(entrance_doors_windows), y = total_score)) + 
+  theme_classic() +
+  geom_violin(fill=&quot;#0000ff&quot;) +
+  geom_boxplot(width = 0.2, color = &quot;#FFA500&quot;) +
+  labs(title = &quot;Total ABS Scores, Sorted by Condition of Entrance Doors and Windows&quot;,
+       x = &quot;Doors and Windows Score&quot;,
+       y = &quot;Total ABS Score&quot;) 
+
+doors_windows_violin</code></pre>
+<p><img src="/post/2015-07-23-r-rmarkdown_files/figure-html/violin%20plots-2.png" width="672" /></p>
+<p>Although we fail to yield any significant results after evaluating each explanatory variable on its own, it is possible that assessing them in conjunction may lead to something promising. To do this, we first create a table to see whether there exists any significant variance in ABS score when apartments are grouped by both explanatory variables. Unsurprisingly, we notice an upward trend in ABS score when both categorical variable scores increase. To visualize this in a cleaner way, we create a scatter plot. Lobby scores are marked on the x-axis, doors and windows scores are marked on the y-axis, and apartment scores are marked on a blue gradient where lighter dots represent higher total ABS scores. It is now much easier to see the increase in total ABS score when both explanatory variables are accounted for.</p>
+<pre class="r"><code>clean_data %&gt;% 
+  group_by(entrance_lobby, entrance_doors_windows) %&gt;% 
+  summarize(avg_score = mean(total_score, na.rm = TRUE)) </code></pre>
+<pre><code>## `summarise()` regrouping output by &#39;entrance_lobby&#39; (override with `.groups` argument)</code></pre>
+<pre><code>## # A tibble: 18 x 3
+## # Groups:   entrance_lobby [5]
+##    entrance_lobby entrance_doors_windows avg_score
+##             &lt;dbl&gt;                  &lt;dbl&gt;     &lt;dbl&gt;
+##  1              1                      2      37  
+##  2              2                      1      43  
+##  3              2                      2      51.7
+##  4              2                      3      57.0
+##  5              2                      4      67.7
+##  6              3                      1      51.5
+##  7              3                      2      59.6
+##  8              3                      3      67.0
+##  9              3                      4      72.3
+## 10              3                      5      76.1
+## 11              4                      2      71.8
+## 12              4                      3      73.0
+## 13              4                      4      77.8
+## 14              4                      5      83.8
+## 15              5                      2      63  
+## 16              5                      3      83.0
+## 17              5                      4      84.8
+## 18              5                      5      89.1</code></pre>
+<pre class="r"><code>clean_data %&gt;% 
+  # total apartment scores are shown with lighter shades of blue
+  # lobby ratings appear on x-axis
+  # entrance doors and windows ratings appear on y-axis
+  ggplot(aes(x = entrance_lobby, y = entrance_doors_windows, color = total_score)) +
+  geom_point(position = position_jitterdodge(jitter.width = 0.3,
+  jitter.height = 0.3)) +
+  labs(title = &quot;Total ABS Scores, Sorted by Quality of Entrance Doors and Entrance Windows and Lobbies&quot;,
+       x = &quot;Lobby Score&quot;,
+       y = &quot;Doors and Windows Score&quot;,
+       color = &quot;Total ABS Score&quot;)</code></pre>
+<p><img src="/post/2015-07-23-r-rmarkdown_files/figure-html/dot%20plot%20with%20both%20explanatory%20variables-1.png" width="672" /></p>
+<p>As helpful as plots and other visuals can be, when it comes to statistical analysis and research, it is best perhaps to use them to supplement a more mathematically rigorous model. In this case, because we have one response variable and two explanatory variables, we can use a multiple linear regression to model our findings. In general, our model can be described by the following equation: y = b0 + b1<em>x1 + b2</em>x2, where y is total ABS score, x1 is lobby score, x2 is doors and windows score, and the “b” values are measures of association between the “x” values and the outcome. In R, we can conduct a multiple linear regression output with little effort.</p>
+<pre class="r"><code># conducting a multiple linear regression, two explanatory variables against total apartment score
+mult_reg &lt;- lm(total_score ~ entrance_lobby + entrance_doors_windows, data = clean_data)
+# the output of the linear regression model
+summary(mult_reg)</code></pre>
+<pre><code>## 
+## Call:
+## lm(formula = total_score ~ entrance_lobby + entrance_doors_windows, 
+##     data = clean_data)
+## 
+## Residuals:
+##      Min       1Q   Median       3Q      Max 
+## -21.8093  -3.5199  -0.0785   3.3629  18.6523 
+## 
+## Coefficients:
+##                        Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)             31.8440     0.6169   51.62   &lt;2e-16 ***
+## entrance_lobby           6.7308     0.1644   40.93   &lt;2e-16 ***
+## entrance_doors_windows   4.8278     0.1777   27.17   &lt;2e-16 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Residual standard error: 5.452 on 2865 degrees of freedom
+## Multiple R-squared:  0.6568, Adjusted R-squared:  0.6565 
+## F-statistic:  2741 on 2 and 2865 DF,  p-value: &lt; 2.2e-16</code></pre>
+<p>The multiple regression model tells us that if both explanatory score variables were set to 0, it expects an apartment’s total ABS score to be just under 32. For every increase by 1 for lobby score, the model predicts an increase in total ABS score by 6.7308. For every increase by 1 for entrance doors and windows score, the model predicts an increase of 4.8278. This result concludes that apartment lobby quality may reflect total apartment quality more strongly than entrance doors and windows do. The low P values (&lt;2e-16) for both explanatory variables indicate that they are meaningful additions to the model, as well as statistically significant. The adjusted R-squared value (0.6565) indicates that the two explanatory variables account for just over 65% of the variance in total ABS score. Based on the outcomes of the regression model, we can conclude that there exists a positive linear association between apartment lobby scores, apartment entrance doors and windows scores, and total apartment scores in the RentSafeTO dataset.</p>
+</div>
+<div id="weaknesses-and-next-steps" class="section level1">
+<h1>Weaknesses and Next steps</h1>
+<p>A significant limitation to this study are any potential lurking variables, namely building upkeep budgets, size of the developers/landlords, and average unit costs. This study, which focuses on building qualities and amenities that lean on funding, tends to ignore money as a factor altogether. Furthermore, the data used in this study relies on specific auditing scores based on a relatively small scale (1-5). It is possible that a dataset containing a more detailed scoring system would yield more conclusive results. Finally, the two explanatory variables used in this study were selected somewhat arbitrarily from a wide variety of categorical scores. It is possible that any random combination of explanatory variables from the dataset could have produced similar results. Other researchers interested in using the RentSafeTO apartment dataset may choose to focus on a wider variety of explanatory variables, different from the combination used in this paper. A similar multiple regression model with several more explanatory variables may end up explaining more of the variance in ABS scores across different buildings. One possible extension of this project may involve hand collected data from random tenants, visitors, and other pedestrians, instead of the RentSafeTO dataset.</p>
+</div>
+<div id="code" class="section level1">
+<h1>Code</h1>
+<p>All code for this paper are available at <a href="https://github.com/neelvisen/STA304-PS1" class="uri">https://github.com/neelvisen/STA304-PS1</a></p>
+</div>
+<div id="references" class="section level1">
+<h1>References</h1>
+<p>Hadley Wickham, Jim Hester and Winston Chang
+(2020). devtools: Tools to Make Developing R
+Packages Easier. R package version 2.3.1.
+<a href="https://CRAN.R-project.org/package=devtools" class="uri">https://CRAN.R-project.org/package=devtools</a></p>
+<p>Hadley Wickham, Romain François, Lionel Henry and
+Kirill Müller (2020). dplyr: A Grammar of Data
+Manipulation. R package version 1.0.1.
+<a href="https://CRAN.R-project.org/package=dplyr" class="uri">https://CRAN.R-project.org/package=dplyr</a></p>
+<p>R Core Team (2020). R: A language and environment
+for statistical computing. R Foundation for
+Statistical Computing, Vienna, Austria. URL
+<a href="https://www.R-project.org/" class="uri">https://www.R-project.org/</a>.</p>
+<p>Sharla Gelfand (2020). opendatatoronto: Access
+the City of Toronto Open Data Portal. R package
+version 0.1.3.
+<a href="https://CRAN.R-project.org/package=opendatatoronto" class="uri">https://CRAN.R-project.org/package=opendatatoronto</a></p>
+<p>Wickham et al., (2019). Welcome to the tidyverse.
+Journal of Open Source Software, 4(43), 1686,
+<a href="https://doi.org/10.21105/joss.01686" class="uri">https://doi.org/10.21105/joss.01686</a></p>
+<p>Yihui Xie, Alison Presmanes Hill, and Amber
+Thomas (2017). blogdown: Creating Websites with R
+Markdown. Chapman and Hall/CRC. ISBN
+978-0815363729</p>
+</div>
+
+    </div>
+  </article>
+
+  
+
+
+</main>
+
+      <footer class="footer">
+        <ul class="footer-links">
+          <li>
+            <a href="/index.xml" type="application/rss+xml" target="_blank">RSS feed</a>
+          </li>
+          <li>
+            <a href="https://gohugo.io/" class="footer-links-kudos">Made with <img src="/images/hugo-logo.png" alt="Img link to Hugo website" width="22" height="22"></a>
+          </li>
+        </ul>
+      </footer>
+
+    </div>
+    
+
+
+
+<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+
+
+
+<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/languages/r.min.js"></script>
+<script src="//cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/languages/yaml.min.js"></script>
+<script>hljs.configure({languages: []}); hljs.initHighlightingOnLoad();</script>
+
+
+
+    
+<script src="/js/math-code.js"></script>
+<script async src="//cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML"></script>
+
+
+    
+  </body>
+</html>
+
