@@ -1,1 +1,1 @@
-# PS1 for STA304 Fall 2020: ABS Scores in Toronto
+This repo contains RMarkdown files of a project that analyzes apartment building scores in Toronto based on lobby features and ratings.
