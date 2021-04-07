@@ -1,4 +1,4 @@
-# Estimating Toronto Apartment Scores Based on Lobby Ratings
+# Estimating Toronto Apartment Scores Based on Lobby Ratings (R)
 
 This repo contains RMarkdown files of a project that analyzes apartment building scores in Toronto based on lobby features and ratings.
 
