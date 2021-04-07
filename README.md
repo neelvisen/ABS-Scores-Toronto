@@ -1,3 +1,5 @@
+# Estimating Toronto Apartment Scores Based on Lobby Ratings
+
 This repo contains RMarkdown files of a project that analyzes apartment building scores in Toronto based on lobby features and ratings.
 
 The project was written as a blogpost and is hosted on a Netlify website at the link shown below.
